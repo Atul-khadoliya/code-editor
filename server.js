@@ -22,7 +22,6 @@ wss.on('connection',ws=>{
     console.log('client connected via Websokets')
 
     let dockerProcess = null;
-   let tempFileFullPathOnHost = null
 
     ws.on('message',async message => {
         try{const data = JSON.parse(message) ;
@@ -38,13 +37,13 @@ wss.on('connection',ws=>{
         
         const uniqueId = uuidv4() ;
         const tempFilename = `temp_code_${uniqueId}.py`;
-       const tempFilePathInContainer = path.join('/temp_files', tempFilename);
-       tempFileFullPathOnHost = path.join('C:/temp_docker_files', tempFilename).replace(/\\/g, '/'); 
+        
+        const tempFilePathForDockerMount = path.join('/temp_files', tempFilename);
 
 
         const dockerImage = 'python:3.9-slim-buster';
-       await fs.promises.writeFile(tempFilePathInContainer, code);
-       console.log(`Code written to ${tempFilePathInContainer} (inside container)`);
+       await fs.promises.writeFile(tempFilePathForDockerMount, code);
+       console.log(`Code written to ${tempFilePathForDockerMount} (inside container)`);
         ws.send(JSON.stringify({ type: 'status', value: 'Code received and preparing for execution...' }));
 
         
@@ -56,7 +55,7 @@ wss.on('connection',ws=>{
                     '--net=none', // Restrict network access for security
                     '--memory=128m', // Limit memory to 128MB
                     '--cpus=0.5', // Limit CPU to 0.5 cores
-                    '-v', `${tempFileFullPathOnHost}:/app/code.py`,
+                    '-v', `${tempFilePathForDockerMount}:/app/code.py`, // <-- Changed variable name
                     dockerImage,
                     'python', '/app/code.py'
                 ];
@@ -125,12 +124,12 @@ wss.on('connection',ws=>{
             dockerProcess = null ;
         }
 
-        if (tempFileFullPathOnHost && fs.existsSync(tempFileFullPathOnHost)) {
-    fs.unlink(tempFileFullPathOnHost, (err) => {
-        if (err) console.error(`Error deleting temp file ${tempFileFullPathOnHost}:`, err);
-        else console.log(`Temporary file ${tempFileFullPathOnHost} deleted.`);
+   if (tempFilePathForDockerMount && fs.existsSync(tempFilePathForDockerMount)) {
+    fs.unlink(tempFilePathForDockerMount, (err) => {
+        if (err) console.error(`Error deleting temp file ${tempFilePathForDockerMount}:`, err);
+        else console.log(`Temporary file ${tempFilePathForDockerMount} deleted.`);
     });
-    tempFileFullPathOnHost = null;
+    // tempFilePathForDockerMount = null; // No need to nullify a const, it's defined inside the if block
 }
     }
 })
