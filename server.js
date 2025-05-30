@@ -6,11 +6,11 @@ const {v4:uuidv4} = require('uuid')
 const {WebSocket} = require('ws')
 
 const app = express();
-const PORT = 3000;
+const PORT = 3000 || process.env.PORT;
 app.use(express.json());
 
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT,'0.0.0.0', () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
 const wss = new WebSocket.Server({server})
