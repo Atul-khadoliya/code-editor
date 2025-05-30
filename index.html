@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monaco Code Editor</title>
+    <style>
+        body {
+            font-family: monospace;
+            display: flex;
+            flex-direction: column;
+            height: 100vh; /* Full viewport height */
+            margin: 0;
+            padding: 20px;
+            background-color: #282c34; /* Dark background */
+            color: #abb2bf; /* Light text color */
+        }
+
+        h1 {
+            color: #61afef; /* A nice blue for headings */
+            margin-bottom: 15px;
+        }
+
+        #editor-container {
+            flex-grow: 1; /* Allows it to take available space */
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #61afef;
+            border-radius: 5px;
+            overflow: hidden; /* Important for containing Monaco */
+        }
+
+        /* Monaco Editor will render inside this div */
+        #editor {
+            flex-grow: 1; /* Takes up space within editor-container */
+            height: 100%; /* Important for Monaco to render correctly */
+            /* Monaco sets its own background/colors, so no need for explicit styles here */
+        }
+
+        #terminal-output {
+            background-color: #000000;
+            color: #ffffff;
+            padding: 10px;
+            height: 200px; /* Fixed height for terminal */
+            overflow-y: auto; /* Scroll if content overflows */
+            border-top: 1px solid #61afef;
+            font-size: 0.9em;
+            white-space: pre-wrap; /* Preserve formatting like newlines */
+            box-sizing: border-box;
+        }
+
+        #terminal-input-container {
+            display: flex;
+            background-color: #000000;
+            border-top: 1px solid #61afef;
+        }
+
+        #terminal-input {
+            flex-grow: 1;
+            background-color: #000000;
+            color: #ffffff;
+            border: none;
+            outline: none;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+
+        button {
+            margin-top: 10px;
+            padding: 10px 15px;
+            background-color: #61afef;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: background-color 0.2s ease;
+        }
+
+        button:hover {
+            background-color: #528abd;
+        }
+
+        button:disabled {
+            background-color: #888;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <h1>Simple Python Editor</h1>
+    <div id="editor-container">
+        <div id="editor"></div>
+        <div id="terminal-output"></div>
+        <div id="terminal-input-container">
+            <input type="text" id="terminal-input" placeholder="Type input here..." disabled>
+            <button id="send-input-btn" disabled>Send Input</button>
+        </div>
+    </div>
+    <button id="run-btn">Run Code</button>
+
+    <script src="https://unpkg.com/monaco-editor@0.48.0/min/vs/loader.js"></script>
+    <script>
+        let editor; // Declare Monaco editor instance globally accessible
+
+        // Configure require.js for Monaco
+        require.config({ paths: { 'vs': 'https://unpkg.com/monaco-editor@0.48.0/min/vs' }});
+
+        // Load Monaco Editor
+        require(['vs/editor/editor.main'], function() {
+            // Create the editor instance
+            editor = monaco.editor.create(document.getElementById('editor'), {
+                value: `print("Hello, interactive world!")
+name = input("What's your name? ")
+print(f"Nice to meet you, {name}!")
+age = input("How old are you? ")
+print(f"So you are {age} years old.")`, // Default code
+                language: 'python', // Set default language
+                theme: 'vs-dark', // Use VS Code's dark theme
+                minimap: { enabled: false }, // Disable the minimap
+                automaticLayout: true // Automatically resize on window resize
+            });
+
+            // The automaticLayout: true option typically handles resizing,
+            // but manual layout can be added if needed for specific containers.
+            // window.addEventListener('resize', () => {
+            //     editor.layout();
+            // });
+
+            // Now that Monaco is initialized, we can proceed with your application's logic.
+            // Call an initialization function or setup event listeners here.
+            initializeApplication();
+        });
+
+        // --- Your Application's Main JavaScript Logic ---
+        // This function will be called AFTER Monaco Editor is fully loaded.
+        function initializeApplication() {
+            const terminalOutput = document.getElementById('terminal-output');
+            const terminalInput = document.getElementById('terminal-input');
+            const sendInputBtn = document.getElementById('send-input-btn');
+            const runBtn = document.getElementById('run-btn');
+
+            let ws; // Declare WebSocket globally for easy access within this scope
+
+            function appendOutput(message) {
+                terminalOutput.textContent += message + '\n';
+                terminalOutput.scrollTop = terminalOutput.scrollHeight; // Auto-scroll to bottom
+            }
+
+            function clearOutput() {
+                terminalOutput.textContent = '';
+            }
+
+            function enableInput(enable) {
+                terminalInput.disabled = !enable;
+                sendInputBtn.disabled = !enable;
+                if (enable) {
+                    terminalInput.focus();
+                }
+            }
+
+            runBtn.addEventListener('click', () => {
+                clearOutput();
+                enableInput(false); // Disable input while code is running
+                runBtn.disabled = true; // Disable run button during execution
+
+                // Close existing WebSocket if any
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.close();
+                }
+
+                // Establish a new WebSocket connection
+                ws = new WebSocket('ws://localhost:3000'); // Connect to your Node.js backend
+
+                ws.onopen = () => {
+                    appendOutput("Connecting to backend...");
+                    appendOutput("Connection established. Sending code...");
+                    // Get code directly from Monaco editor instance
+                    const code = editor.getValue();
+                    ws.send(JSON.stringify({ type: 'code', value: code, language: 'python' }));
+                };
+
+                ws.onmessage = event => {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'output') {
+                        appendOutput(data.value);
+                        // Simple heuristic: if output contains '?' or ':', or is empty, enable input
+                        if (data.value.includes('?') || data.value.includes(':') || data.value.trim() === '') {
+                             if (runBtn.disabled) { // Check if program is still running
+                                enableInput(true);
+                             }
+                        }
+                    } else if (data.type === 'error') {
+                        appendOutput(`ERROR: ${data.value}`);
+                        ws.close();
+                        runBtn.disabled = false;
+                        enableInput(false);
+                    } else if (data.type === 'status') {
+                        appendOutput(`STATUS: ${data.value}`);
+                    } else if (data.type === 'end') {
+                        appendOutput("--- Program Finished ---");
+                        ws.close();
+                        runBtn.disabled = false;
+                        enableInput(false);
+                    }
+                };
+
+                ws.onclose = () => {
+                    appendOutput("--- Backend connection closed ---");
+                    runBtn.disabled = false;
+                    enableInput(false);
+                };
+
+                ws.onerror = error => {
+                    appendOutput(`--- WebSocket Error: ${error.message} ---`);
+                    console.error('WebSocket Error:', error);
+                    runBtn.disabled = false;
+                    enableInput(false);
+                };
+            });
+
+            // Function to send input via WebSocket
+            function sendInput() {
+                const input = terminalInput.value;
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'input', value: input }));
+                    appendOutput(`> ${input}`); // Echo user's input to terminal
+                    terminalInput.value = ''; // Clear input field
+                    enableInput(false); // Disable input after sending until next request
+                }
+            }
+
+            // Event listeners for sending input
+            sendInputBtn.addEventListener('click', sendInput);
+            terminalInput.addEventListener('keypress', (event) => {
+                if (event.key === 'Enter') {
+                    sendInput();
+                }
+            });
+
+            // Focus on the Monaco editor after it's loaded
+            editor.focus();
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+
+node_modules/
+npm-debug.log
+.env
+
+*.log
+temp_code_*.py
+C:/temp_docker_files/ # Ignore the temp files folder you created on host
+
+.DS_Store
+
+.vscode/
