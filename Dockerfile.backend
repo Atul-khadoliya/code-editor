@@ -28,6 +28,7 @@ echo \
 apt-get update && apt-get install -y docker-ce-cli
 # --- END NEW ADDITIONS ---
 
+RUN groupadd -r docker || true && usermod -aG docker node
 # Copy the application source code to the working directory
 COPY . .
 
