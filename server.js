@@ -22,7 +22,7 @@ wss.on('connection',ws=>{
     console.log('client connected via Websokets')
 
     let dockerProcess = null;
-
+    let tempFilePathForDockerMount = null
     ws.on('message',async message => {
         try{const data = JSON.parse(message) ;
 
@@ -38,7 +38,7 @@ wss.on('connection',ws=>{
         const uniqueId = uuidv4() ;
         const tempFilename = `temp_code_${uniqueId}.py`;
         
-        const tempFilePathForDockerMount = path.join('/temp_files', tempFilename);
+         tempFilePathForDockerMount = path.join('/temp_files', tempFilename);
 
 
         const dockerImage = 'python:3.9-slim-buster';
@@ -129,7 +129,7 @@ wss.on('connection',ws=>{
         if (err) console.error(`Error deleting temp file ${tempFilePathForDockerMount}:`, err);
         else console.log(`Temporary file ${tempFilePathForDockerMount} deleted.`);
     });
-    // tempFilePathForDockerMount = null; // No need to nullify a const, it's defined inside the if block
+     tempFilePathForDockerMount = null; 
 }
     }
 })
