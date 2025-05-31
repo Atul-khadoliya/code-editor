@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Monaco Code Editor</title>
     <style>
+        /* YOUR CSS STYLES - NO CHANGES NEEDED HERE, REMAINS THE SAME AS YOU PROVIDED */
         body {
             font-family: monospace;
             display: flex;
@@ -30,11 +31,9 @@
             overflow: hidden; /* Important for containing Monaco */
         }
 
-        /* Monaco Editor will render inside this div */
         #editor {
-            flex-grow: 1; /* Takes up space within editor-container */
-            height: 100%; /* Important for Monaco to render correctly */
-            /* Monaco sets its own background/colors, so no need for explicit styles here */
+            flex-grow: 1;
+            height: 100%;
         }
 
         #terminal-output {
@@ -104,52 +103,48 @@
     <script>
         let editor; // Declare Monaco editor instance globally accessible
 
-        // Configure require.js for Monaco
         require.config({ paths: { 'vs': 'https://unpkg.com/monaco-editor@0.48.0/min/vs' }});
 
-        // Load Monaco Editor
         require(['vs/editor/editor.main'], function() {
-            // Create the editor instance
             editor = monaco.editor.create(document.getElementById('editor'), {
                 value: `print("Hello, interactive world!")
 name = input("What's your name? ")
 print(f"Nice to meet you, {name}!")
 age = input("How old are you? ")
-print(f"So you are {age} years old.")`, // Default code
-                language: 'python', // Set default language
-                theme: 'vs-dark', // Use VS Code's dark theme
-                minimap: { enabled: false }, // Disable the minimap
-                automaticLayout: true // Automatically resize on window resize
+print(f"So you are {age} years old.")`,
+                language: 'python',
+                theme: 'vs-dark',
+                minimap: { enabled: false },
+                automaticLayout: true
             });
-
-            // The automaticLayout: true option typically handles resizing,
-            // but manual layout can be added if needed for specific containers.
-            // window.addEventListener('resize', () => {
-            //     editor.layout();
-            // });
-
-            // Now that Monaco is initialized, we can proceed with your application's logic.
-            // Call an initialization function or setup event listeners here.
             initializeApplication();
         });
 
-        // --- Your Application's Main JavaScript Logic ---
-        // This function will be called AFTER Monaco Editor is fully loaded.
         function initializeApplication() {
             const terminalOutput = document.getElementById('terminal-output');
             const terminalInput = document.getElementById('terminal-input');
             const sendInputBtn = document.getElementById('send-input-btn');
             const runBtn = document.getElementById('run-btn');
 
-            let ws; // Declare WebSocket globally for easy access within this scope
+            let ws = null; // Declare WebSocket here, initialized to null
 
-            function appendOutput(message) {
-                terminalOutput.textContent += message + '\n';
-                terminalOutput.scrollTop = terminalOutput.scrollHeight; // Auto-scroll to bottom
+            function appendOutput(message, type = 'info') { // Added type for potential styling
+                const messageElement = document.createElement('div');
+                messageElement.textContent = message;
+                // Basic styling based on type - you can expand this with CSS classes
+                if (type === 'error') {
+                    messageElement.style.color = 'red';
+                } else if (type === 'status') {
+                    messageElement.style.color = 'lightgray';
+                } else if (type === 'output') {
+                    // Default color (white on black) is fine for output
+                }
+                terminalOutput.appendChild(messageElement);
+                terminalOutput.scrollTop = terminalOutput.scrollHeight;
             }
 
             function clearOutput() {
-                terminalOutput.textContent = '';
+                terminalOutput.innerHTML = ''; // Use innerHTML to clear all child elements
             }
 
             function enableInput(enable) {
@@ -162,85 +157,106 @@ print(f"So you are {age} years old.")`, // Default code
 
             runBtn.addEventListener('click', () => {
                 clearOutput();
-                enableInput(false); // Disable input while code is running
-                runBtn.disabled = true; // Disable run button during execution
+                enableInput(false);
+                runBtn.disabled = true;
+                appendOutput("Processing...", "status");
 
-                // Close existing WebSocket if any
-                if (ws && ws.readyState === WebSocket.OPEN) {
+                // If a WebSocket connection already exists (from a previous run), close it.
+                if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+                    console.log("Closing previous WebSocket connection.");
                     ws.close();
                 }
 
-                // Establish a new WebSocket connection
-               const ws = new WebSocket('wss://jolly-dasik-729c4a.netlify.app/ws-backend/');
+                appendOutput("Attempting to connect to backend via Netlify proxy...", "status");
+                // Assign to the 'ws' variable declared in the initializeApplication scope
+                ws = new WebSocket('wss://jolly-dasik-729c4a.netlify.app/ws-backend/');
 
                 ws.onopen = () => {
-                    appendOutput("Connecting to backend...");
-                    appendOutput("Connection established. Sending code...");
-                    // Get code directly from Monaco editor instance
+                    console.log('Frontend WebSocket connection opened.');
+                    appendOutput("Connection established. Sending code...", "status");
                     const code = editor.getValue();
                     ws.send(JSON.stringify({ type: 'code', value: code, language: 'python' }));
                 };
 
                 ws.onmessage = event => {
-                    const data = JSON.parse(event.data);
-                    if (data.type === 'output') {
-                        appendOutput(data.value);
-                        // Simple heuristic: if output contains '?' or ':', or is empty, enable input
-                        if (data.value.includes('?') || data.value.includes(':') || data.value.trim() === '') {
-                             if (runBtn.disabled) { // Check if program is still running
-                                enableInput(true);
-                             }
+                    console.log('Frontend received message:', event.data);
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.type === 'output') {
+                            appendOutput(data.value, 'output');
+                            // Heuristic for enabling input: if output contains '?' or ':' (case-insensitive),
+                            // or if the output is an empty line suggesting a prompt.
+                            const trimmedValue = data.value.trim();
+                            if (trimmedValue.includes('?') || trimmedValue.includes(':') || trimmedValue === '') {
+                                if (runBtn.disabled) { // Check if program is considered still running
+                                    enableInput(true);
+                                }
+                            }
+                        } else if (data.type === 'error') {
+                            appendOutput(`ERROR: ${data.value}`, 'error');
+                            // Consider closing ws here, or let onclose handle UI state
+                            if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+                            runBtn.disabled = false;
+                            enableInput(false);
+                        } else if (data.type === 'status') {
+                            appendOutput(`STATUS: ${data.value}`, 'status');
+                        } else if (data.type === 'end') {
+                            appendOutput("--- Program Finished ---", 'status');
+                            if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+                            runBtn.disabled = false;
+                            enableInput(false);
                         }
-                    } else if (data.type === 'error') {
-                        appendOutput(`ERROR: ${data.value}`);
-                        ws.close();
-                        runBtn.disabled = false;
-                        enableInput(false);
-                    } else if (data.type === 'status') {
-                        appendOutput(`STATUS: ${data.value}`);
-                    } else if (data.type === 'end') {
-                        appendOutput("--- Program Finished ---");
-                        ws.close();
+                    } catch (e) {
+                        console.error("Error parsing message from backend or handling it:", e);
+                        appendOutput("Received unparseable or malformed message from backend.", "error");
+                    }
+                };
+
+                ws.onerror = error => {
+                    console.error('Frontend WebSocket Error:', error);
+                    // The error object itself might not have a useful .message for display
+                    appendOutput("--- WebSocket Error: Could not connect or connection lost. Check browser console (F12). ---", 'error');
+                    runBtn.disabled = false;
+                    enableInput(false);
+                };
+
+                ws.onclose = event => {
+                    console.log('Frontend WebSocket connection closed. Code:', event.code, 'Reason:', event.reason);
+                    appendOutput("--- Backend connection closed ---", 'status');
+                    // Only re-enable if not already enabled by 'end' or 'error'
+                    if (runBtn.disabled) {
                         runBtn.disabled = false;
                         enableInput(false);
                     }
                 };
-
-                ws.onclose = () => {
-                    appendOutput("--- Backend connection closed ---");
-                    runBtn.disabled = false;
-                    enableInput(false);
-                };
-
-                ws.onerror = error => {
-                    appendOutput(`--- WebSocket Error: ${error.message} ---`);
-                    console.error('WebSocket Error:', error);
-                    runBtn.disabled = false;
-                    enableInput(false);
-                };
             });
 
-            // Function to send input via WebSocket
             function sendInput() {
                 const input = terminalInput.value;
+                // Check the 'ws' from the initializeApplication scope
                 if (ws && ws.readyState === WebSocket.OPEN) {
                     ws.send(JSON.stringify({ type: 'input', value: input }));
-                    appendOutput(`> ${input}`); // Echo user's input to terminal
-                    terminalInput.value = ''; // Clear input field
-                    enableInput(false); // Disable input after sending until next request
+                    appendOutput(`> ${input}`, 'input'); // 'input' could be another type for styling
+                    terminalInput.value = '';
+                    // Consider if input should be disabled immediately after sending,
+                    // or wait for backend to signal readiness for more input.
+                    // For now, let's keep it simple: it's re-enabled by onmessage heuristic.
+                    // enableInput(false); // Optional: disable until next prompt
+                } else {
+                    appendOutput("Cannot send input: WebSocket is not connected.", "error");
                 }
             }
 
-            // Event listeners for sending input
             sendInputBtn.addEventListener('click', sendInput);
             terminalInput.addEventListener('keypress', (event) => {
-                if (event.key === 'Enter') {
+                if (event.key === 'Enter' && !terminalInput.disabled) {
                     sendInput();
                 }
             });
 
-            // Focus on the Monaco editor after it's loaded
-            editor.focus();
+            if (editor) { // Ensure editor is initialized
+                editor.focus();
+            }
         }
     </script>
 </body>
