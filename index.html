@@ -171,7 +171,7 @@ print(f"So you are {age} years old.")`, // Default code
                 }
 
                 // Establish a new WebSocket connection
-               ws = new WebSocket('ws://51.20.78.224:3000');// Connect to your Node.js backend
+               const ws = new WebSocket('wss://jolly-dasik-729c4a.netlify.app/ws-backend/');
 
                 ws.onopen = () => {
                     appendOutput("Connecting to backend...");

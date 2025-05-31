@@ -1,0 +1,5 @@
+[[redirects]]
+  from = "/ws-backend/*"
+  to = "http://51.20.78.224:3000/:splat"
+  status = 200
+  force = true
