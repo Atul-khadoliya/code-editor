@@ -16,7 +16,23 @@ app.get('/', (req, res) => {
 const server = app.listen(PORT,'0.0.0.0', () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
-const wss = new WebSocket.Server({server})
+const wss = new WebSocket.Server({
+  port: PORT, // Or attach to your existing HTTP server
+  verifyClient: (info, callback) => {
+    const allowedOrigins = [
+      'https://jolly-dasik-729c4a.netlify.app/', // *** REPLACE with your Netlify URL ***
+    ];
+    const origin = info.origin;
+
+    if (allowedOrigins.includes(origin)) {
+      console.log(`WebSocket connection from origin: ${origin} allowed.`);
+      callback(true); // Allow connection
+    } else {
+      console.log(`WebSocket connection from origin: ${origin} DENIED.`);
+      callback(false, 403, 'Forbidden origin'); // Deny connection
+    }
+  }
+});
 
 wss.on('connection',ws=>{
     console.log('client connected via Websokets')
