@@ -1,5 +1,13 @@
+# This rule should already be in your netlify.toml
 [[redirects]]
   from = "/ws-backend/*"
   to = "http://51.20.78.224:3000/:splat"
   status = 200
+  force = true
+
+# ADD THIS NEW RULE:
+[[redirects]]
+  from = "/api/ping"  # When frontend requests /api/ping
+  to = "http://51.20.78.224:3000/ping" # Netlify proxies to EC2's /ping endpoint
+  status = 200 # For proxying
   force = true
