@@ -171,7 +171,7 @@ print(f"So you are {age} years old.")`, // Default code
                 }
 
                 // Establish a new WebSocket connection
-                ws = new WebSocket('wss://code-runner-backend-live.onrender.com'); // Connect to your Node.js backend
+               ws = new WebSocket('ws://51.20.78.224:3000');// Connect to your Node.js backend
 
                 ws.onopen = () => {
                     appendOutput("Connecting to backend...");
