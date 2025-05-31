@@ -1,105 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monaco Code Editor</title>
-    <style>
-        /* YOUR CSS STYLES - NO CHANGES NEEDED HERE, REMAINS THE SAME AS YOU PROVIDED */
-        body {
-            font-family: monospace;
-            display: flex;
-            flex-direction: column;
-            height: 100vh; /* Full viewport height */
-            margin: 0;
-            padding: 20px;
-            background-color: #282c34; /* Dark background */
-            color: #abb2bf; /* Light text color */
-        }
-
-        h1 {
-            color: #61afef; /* A nice blue for headings */
-            margin-bottom: 15px;
-        }
-
-        #editor-container {
-            flex-grow: 1; /* Allows it to take available space */
-            display: flex;
-            flex-direction: column;
-            border: 1px solid #61afef;
-            border-radius: 5px;
-            overflow: hidden; /* Important for containing Monaco */
-        }
-
-        #editor {
-            flex-grow: 1;
-            height: 100%;
-        }
-
-        #terminal-output {
-            background-color: #000000;
-            color: #ffffff;
-            padding: 10px;
-            height: 200px; /* Fixed height for terminal */
-            overflow-y: auto; /* Scroll if content overflows */
-            border-top: 1px solid #61afef;
-            font-size: 0.9em;
-            white-space: pre-wrap; /* Preserve formatting like newlines */
-            box-sizing: border-box;
-        }
-
-        #terminal-input-container {
-            display: flex;
-            background-color: #000000;
-            border-top: 1px solid #61afef;
-        }
-
-        #terminal-input {
-            flex-grow: 1;
-            background-color: #000000;
-            color: #ffffff;
-            border: none;
-            outline: none;
-            padding: 10px;
-            font-family: monospace;
-            font-size: 0.9em;
-        }
-
-        button {
-            margin-top: 10px;
-            padding: 10px 15px;
-            background-color: #61afef;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 1em;
-            transition: background-color 0.2s ease;
-        }
-
-        button:hover {
-            background-color: #528abd;
-        }
-
-        button:disabled {
-            background-color: #888;
-            cursor: not-allowed;
-        }
-    </style>
-</head>
-<body>
-    <h1>Simple Python Editor</h1>
-    <div id="editor-container">
-        <div id="editor"></div>
-        <div id="terminal-output"></div>
-        <div id="terminal-input-container">
-            <input type="text" id="terminal-input" placeholder="Type input here..." disabled>
-            <button id="send-input-btn" disabled>Send Input</button>
-        </div>
-    </div>
-    <button id="run-btn">Run Code</button>
-
-    <script src="https://unpkg.com/monaco-editor@0.48.0/min/vs/loader.js"></script>
+<script src="https://unpkg.com/monaco-editor@0.48.0/min/vs/loader.js"></script>
     <script>
         let editor; // Declare Monaco editor instance globally accessible
 
@@ -126,25 +25,22 @@ print(f"So you are {age} years old.")`,
             const sendInputBtn = document.getElementById('send-input-btn');
             const runBtn = document.getElementById('run-btn');
 
-            let ws = null; // Declare WebSocket here, initialized to null
+            let ws = null; // WebSocket variable managed within this scope
 
-            function appendOutput(message, type = 'info') { // Added type for potential styling
+            function appendOutput(message, type = 'info') {
                 const messageElement = document.createElement('div');
                 messageElement.textContent = message;
-                // Basic styling based on type - you can expand this with CSS classes
                 if (type === 'error') {
                     messageElement.style.color = 'red';
                 } else if (type === 'status') {
                     messageElement.style.color = 'lightgray';
-                } else if (type === 'output') {
-                    // Default color (white on black) is fine for output
                 }
                 terminalOutput.appendChild(messageElement);
                 terminalOutput.scrollTop = terminalOutput.scrollHeight;
             }
 
             function clearOutput() {
-                terminalOutput.innerHTML = ''; // Use innerHTML to clear all child elements
+                terminalOutput.innerHTML = '';
             }
 
             function enableInput(enable) {
@@ -161,21 +57,31 @@ print(f"So you are {age} years old.")`,
                 runBtn.disabled = true;
                 appendOutput("Processing...", "status");
 
-                // If a WebSocket connection already exists (from a previous run), close it.
-                if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-                    console.log("Closing previous WebSocket connection.");
-                    ws.close();
+                // If a WebSocket connection already exists, close it properly.
+                if (ws) {
+                    console.log("Closing previous WebSocket connection if open.");
+                    // Remove old listeners to prevent them from firing for the old socket
+                    ws.onopen = null;
+                    ws.onmessage = null;
+                    ws.onerror = null;
+                    ws.onclose = null;
+                    if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+                        ws.close();
+                    }
                 }
 
-                appendOutput("Attempting to connect to backend via Netlify proxy...", "status");
+                appendOutput("Attempting to connect to backend wss://myonlinepython.in ...", "status");
                 // Assign to the 'ws' variable declared in the initializeApplication scope
-                const ws = new WebSocket('wss://myonlinepython.in');
+                // ***** THIS IS THE KEY FIX: changed 'const ws =' to 'ws =' *****
+                ws = new WebSocket('wss://myonlinepython.in');
 
                 ws.onopen = () => {
-                    console.log('Frontend WebSocket connection opened.');
+                    console.log('Frontend WebSocket connection opened to wss://myonlinepython.in');
                     appendOutput("Connection established. Sending code...", "status");
                     const code = editor.getValue();
-                    ws.send(JSON.stringify({ type: 'code', value: code, language: 'python' }));
+                    if (ws.readyState === WebSocket.OPEN) { // Double check before sending
+                        ws.send(JSON.stringify({ type: 'code', value: code, language: 'python' }));
+                    }
                 };
 
                 ws.onmessage = event => {
@@ -184,37 +90,34 @@ print(f"So you are {age} years old.")`,
                         const data = JSON.parse(event.data);
                         if (data.type === 'output') {
                             appendOutput(data.value, 'output');
-                            // Heuristic for enabling input: if output contains '?' or ':' (case-insensitive),
-                            // or if the output is an empty line suggesting a prompt.
-                            const trimmedValue = data.value.trim();
-                            if (trimmedValue.includes('?') || trimmedValue.includes(':') || trimmedValue === '') {
-                                if (runBtn.disabled) { // Check if program is considered still running
+                            const trimmedValue = data.value.trim().toLowerCase(); // Make check case-insensitive
+                            // More robust check for prompts might be needed based on backend output
+                            if (trimmedValue.includes('?') || trimmedValue.endsWith(':') || trimmedValue === '') {
+                                if (runBtn.disabled) {
                                     enableInput(true);
                                 }
                             }
                         } else if (data.type === 'error') {
                             appendOutput(`ERROR: ${data.value}`, 'error');
-                            // Consider closing ws here, or let onclose handle UI state
-                            if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+                            if (ws && ws.readyState === WebSocket.OPEN) ws.close(); // Close on error
                             runBtn.disabled = false;
                             enableInput(false);
                         } else if (data.type === 'status') {
                             appendOutput(`STATUS: ${data.value}`, 'status');
                         } else if (data.type === 'end') {
                             appendOutput("--- Program Finished ---", 'status');
-                            if (ws && ws.readyState === WebSocket.OPEN) ws.close();
+                            if (ws && ws.readyState === WebSocket.OPEN) ws.close(); // Close on end
                             runBtn.disabled = false;
                             enableInput(false);
                         }
                     } catch (e) {
                         console.error("Error parsing message from backend or handling it:", e);
-                        appendOutput("Received unparseable or malformed message from backend.", "error");
+                        appendOutput("Received unparseable message from backend: " + event.data, "error");
                     }
                 };
 
-                ws.onerror = error => {
-                    console.error('Frontend WebSocket Error:', error);
-                    // The error object itself might not have a useful .message for display
+                ws.onerror = errorEvent => { // errorEvent is the correct parameter name
+                    console.error('Frontend WebSocket Error:', errorEvent);
                     appendOutput("--- WebSocket Error: Could not connect or connection lost. Check browser console (F12). ---", 'error');
                     runBtn.disabled = false;
                     enableInput(false);
@@ -223,8 +126,7 @@ print(f"So you are {age} years old.")`,
                 ws.onclose = event => {
                     console.log('Frontend WebSocket connection closed. Code:', event.code, 'Reason:', event.reason);
                     appendOutput("--- Backend connection closed ---", 'status');
-                    // Only re-enable if not already enabled by 'end' or 'error'
-                    if (runBtn.disabled) {
+                    if (runBtn.disabled) { // Only re-enable if not already done by 'end' or 'error'
                         runBtn.disabled = false;
                         enableInput(false);
                     }
@@ -233,15 +135,10 @@ print(f"So you are {age} years old.")`,
 
             function sendInput() {
                 const input = terminalInput.value;
-                // Check the 'ws' from the initializeApplication scope
-                if (ws && ws.readyState === WebSocket.OPEN) {
+                if (ws && ws.readyState === WebSocket.OPEN) { // Check the 'ws' from initializeApplication scope
                     ws.send(JSON.stringify({ type: 'input', value: input }));
-                    appendOutput(`> ${input}`, 'input'); // 'input' could be another type for styling
+                    appendOutput(`> ${input}`, 'input');
                     terminalInput.value = '';
-                    // Consider if input should be disabled immediately after sending,
-                    // or wait for backend to signal readiness for more input.
-                    // For now, let's keep it simple: it's re-enabled by onmessage heuristic.
-                    // enableInput(false); // Optional: disable until next prompt
                 } else {
                     appendOutput("Cannot send input: WebSocket is not connected.", "error");
                 }
@@ -254,7 +151,7 @@ print(f"So you are {age} years old.")`,
                 }
             });
 
-            if (editor) { // Ensure editor is initialized
+            if (editor) {
                 editor.focus();
             }
         }
