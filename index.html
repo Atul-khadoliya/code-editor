@@ -169,7 +169,7 @@ print(f"So you are {age} years old.")`,
 
                 appendOutput("Attempting to connect to backend via Netlify proxy...", "status");
                 // Assign to the 'ws' variable declared in the initializeApplication scope
-                ws = new WebSocket('wss://jolly-dasik-729c4a.netlify.app/ws-backend/');
+                const ws = new WebSocket('wss://myonlinepython.in');
 
                 ws.onopen = () => {
                     console.log('Frontend WebSocket connection opened.');
